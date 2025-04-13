@@ -1,0 +1,19 @@
+# 虚拟环境目录
+venv/
+env/
+.venv/
+ 
+# Python 缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+ 
+# Django 特定文件
+*.log
+*.pot
+*.pyc
+db.sqlite3
+*.sqlite3
+
+.idea/
+*.iml
