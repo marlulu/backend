@@ -1,6 +1,7 @@
 # Create your views here.
 import math
 import os
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import cv2
@@ -135,6 +136,7 @@ def upload_image(request):
                                      )
             image_instance.save()
             if (request.user.is_superuser):
+                notice.save()
                 return JsonResponse({'code': 200, 'message': '导入成功'})
             else:
                 notice = Notices.objects.create(
@@ -380,6 +382,11 @@ def auto_annotations(request):
     data = json.loads(request.body)
     picture = Picture.objects.get(id=data.get('pictureId'))
     labels = data.get('labels')
+
+    annotations = Annotation.objects.all()
+    for annotation in annotations:
+        annotation.auto = 0
+    Annotation.objects.bulk_update(annotations, ['auto'])
     picture_name = os.path.basename(data.get('picture_file'))
     # 加载 MTCNN 人脸检测器
     detector = MTCNN()
@@ -391,7 +398,7 @@ def auto_annotations(request):
     image_path = os.path.normpath(image_path)
     model_path = os.path.normpath(model_path)
 
-
+    # 加载模型
     model = load_model(model_path)
 
     image = cv2.imread(image_path)
@@ -400,7 +407,7 @@ def auto_annotations(request):
         print("图像未成功加载，请检查路径。")
         return
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-    # 加载模型
+
     emotions = [14, 19, 16, 17, 8, 12, 18]  # 根据需求调整情感标签
     # 使用 MTCNN 进行人脸检测
     faces = detector.detect_faces(image_rgb)
@@ -437,6 +444,7 @@ def auto_annotations(request):
             label_id=label_value,
             label=label[0]['label'],
             color=request.user.first_name,
+            auto=1,
         )
         annotation.save()
         picture.annotation_num = picture.annotation_num + 1
@@ -619,6 +627,7 @@ def export_slices(request):
     filtered_objects = all_objects.filter(query).order_by('-create_at')
 
     value = list(filtered_objects.values())
+    length = len(value)
 
     picture_name = os.path.basename(data.get('picture_name'))
 
@@ -647,20 +656,67 @@ def export_slices(request):
         cv2.imencode('.png', cropped_image)[1].tofile(image_path)
         slice.delete()
 
+    users = User.objects.all()
+    for user in users:
+        notice = Notices.objects.create(
+            description=request.user.username + '导出了 ' + picture_name  + ' 的' +  str(length) + '张切片',
+            type='info',
+            user_id=user.id,
+            status="系统消息"
+        )
+        notice.save()
+
     return JsonResponse({'code': 200, 'message': '导出成功'})
 
 @csrf_exempt
 def get_all_data(request):
-    rada_data = 1
-    pic_data = 1
-    slice_data = 1
-    annotation_data = 1
+    rada_data = [0, 0, 0, 0, 0, 0, 0]
+    pic_data = [0, 0, 0, 0, 0, 0, 0]
+    slice_data = [0, 0, 0, 0, 0, 0, 0]
+    annotation_data = [0, 0, 0, 0, 0, 0, 0]
+    annotations = Annotation.objects.all()
+    current_time_utc = datetime.now(timezone.utc)
+    pictures = Picture.objects.all()
+
+    for picture in pictures:
+        week = picture.create_at.weekday()
+        created_time_utc = datetime.fromisoformat(str(picture.create_at.astimezone(timezone.utc)))
+        time_difference = current_time_utc - created_time_utc
+        is_pass = time_difference >= timedelta(days=7)
+        if not is_pass:
+            pic_data[week] += 1
+
+    for annotation in annotations:
+        week = annotation.createdAt.weekday()
+        created_time_utc = datetime.fromisoformat(str(annotation.createdAt.astimezone(timezone.utc)))
+        time_difference = current_time_utc - created_time_utc
+        is_pass = time_difference >= timedelta(days=7)
+        if not is_pass:
+            if annotation.confirm:
+                slice_data[week] += 1
+            annotation_data[week] += 1
+        label_value= annotation.label_id
+        if label_value == 14:
+            rada_data[0] += 1
+        elif label_value == 19:
+            rada_data[1] += 1
+        elif label_value == 16:
+            rada_data[2] += 1
+        elif label_value == 17:
+            rada_data[3] += 1
+        elif label_value == 8:
+            rada_data[4] += 1
+        elif label_value == 12:
+            rada_data[5] += 1
+        elif label_value == 18:
+            rada_data[6] += 1
+
 
     data = {
-        'rada_data': 1,
-        'pic_data': 1,
-        'slice_data': 1,
-        'annotation_data': 1,
+        'rada_data': rada_data,
+        'pic_data': pic_data,
+        'slice_data': slice_data,
+        'num_data': annotation_data,
     }
 
     return JsonResponse({'code': 200, 'message': '成功', 'data': data})
@@ -668,12 +724,27 @@ def get_all_data(request):
 @csrf_exempt
 def get_person_data(request):
     id = request.user.id
-    annotation_data = 1
-    slice_data = 1
+    line_data = [0, 0, 0, 0, 0, 0, 0]
+    bar_data = [0, 0, 0, 0, 0, 0, 0]
+    current_time_utc = datetime.now(timezone.utc)
+
+    user = User.objects.get(id=id)
+    annotations = Annotation.objects.filter(annotator=user.username)
+
+    for annotation in annotations:
+        week = annotation.createdAt.weekday()
+        created_time_utc = datetime.fromisoformat(str(annotation.createdAt.astimezone(timezone.utc)))
+        time_difference = current_time_utc - created_time_utc
+        is_pass = time_difference >= timedelta(days=7)
+        if not is_pass:
+            if annotation.confirm:
+                line_data[week] += 1
+            bar_data[week] += 1
+
 
     data = {
-        'annotation_data': 1,
-        'slice_data': 1,
+        'line_data': line_data,
+        'bar_data': bar_data,
     }
 
     return JsonResponse({'code': 200, 'message': '成功', 'data': data})

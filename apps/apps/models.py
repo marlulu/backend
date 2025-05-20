@@ -20,6 +20,8 @@ class Label(models.Model):
     title = models.CharField(max_length=120)
     color = models.CharField(max_length=120, blank=True, null=True)
     author = models.ForeignKey(get_user_model(), null=True, blank=True, editable=False, on_delete=models.CASCADE)
+    isDef = models.IntegerField(default=0)
+
 
 class StudyGroup(models.Model):
     title = models.CharField(max_length=100)
@@ -42,6 +44,7 @@ class Picture(models.Model):
     study_group = models.ForeignKey(StudyGroup, on_delete=models.PROTECT, null=True)
     author = models.ForeignKey(get_user_model(), null=True, blank=True, editable=False, on_delete=models.CASCADE)
     is_confirm = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
 
 
 class Annotation(models.Model):
@@ -60,6 +63,8 @@ class Annotation(models.Model):
     label_id = models.IntegerField(default=0)
     label = models.CharField(max_length=50, default='')
     color = models.CharField(max_length=50, default='# 1D8CF8')
+    auto = models.IntegerField(default=0)
+    is_deleted = models.BooleanField(default=False)
 
 class PictureSlices(models.Model):
     name = models.CharField(max_length=120)
@@ -68,3 +73,5 @@ class PictureSlices(models.Model):
     group = models.CharField(max_length=120, default='')
     create_at = models.DateTimeField(auto_now_add=True, null=True)
     annotation = models.ForeignKey(Annotation, on_delete=models.PROTECT, null=True)
+    is_deleted = models.BooleanField(default=False)
+    annotator = models.CharField(max_length=50, default='')
