@@ -136,7 +136,6 @@ def upload_image(request):
                                      )
             image_instance.save()
             if (request.user.is_superuser):
-                notice.save()
                 return JsonResponse({'code': 200, 'message': '导入成功'})
             else:
                 notice = Notices.objects.create(
@@ -401,11 +400,13 @@ def auto_annotations(request):
     # 加载模型
     model = load_model(model_path)
 
+    # 用于读取图像文件并将其加载
     image = cv2.imread(image_path)
     # 检查图像是否成功加载
     if image is None:
         print("图像未成功加载，请检查路径。")
         return
+    # 将图像从 BGR颜色空间，转换为 RGB 颜色空间
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
     emotions = [14, 19, 16, 17, 8, 12, 18]  # 根据需求调整情感标签
@@ -418,9 +419,12 @@ def auto_annotations(request):
         face_img = image_rgb[y:y + height, x:x + width]
 
         # 预处理人脸图像
+        # 灰度化，减少内存消耗
         face_img_gray = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
         face_img_resized = cv2.resize(face_img_gray, (48, 48))
+        # 归一化到[0,1]
         face_img_normalized = face_img_resized.astype('float32') / 255.0
+        # 调整维度为(1,48,48,1)
         face_img_reshaped = face_img_normalized.reshape(1, 48, 48, 1)  # 1个样本，48x48，1个通道
 
         # 进行情感预测
@@ -428,7 +432,6 @@ def auto_annotations(request):
         emotion_index = np.argmax(emotion_prediction)
         emotion_label = emotions[emotion_index]
 
-        annotation = {"left": x, "top": y, "width": width, "height": height}
         label_value = emotion_label
 
         label = [item for item in labels if item['value'] == label_value]
@@ -646,12 +649,17 @@ def export_slices(request):
         annotation = Annotation.objects.get(id=item['annotation_id'])
         slice = PictureSlices.objects.get(id=item['id'])
         # 根据给定的坐标和尺寸裁剪图片
-        cropped_image = image[annotation.top:annotation.top + annotation.height, annotation.left:annotation.left + annotation.width]
+        cropped_image = image[
+                        annotation.top:annotation.top + annotation.height,
+                        annotation.left:annotation.left + annotation.width]
         # 保存裁剪后的图片
         # cv2.imencode(保存格式, 保存图片)[1].tofile(保存路径)
         # # 确保目录存在
         image_name = item['name'] + '.png'
-        image_path = os.path.join('E:\\', 'output', 'media', request.user.username, item['group'], item['pic'], item['label'], image_name)
+        image_path = os.path.join('E:\\', 'output', 'media',
+                                  request.user.username,
+                                  item['group'],
+                                  item['pic'], item['label'], image_name)
         os.makedirs(os.path.dirname(image_path), exist_ok=True)
         cv2.imencode('.png', cropped_image)[1].tofile(image_path)
         slice.delete()
